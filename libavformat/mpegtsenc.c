@@ -113,7 +113,7 @@ static const AVOption options[] = {
     { "mpegts_service_id", "Set service_id field.",
       offsetof(MpegTSWrite, service_id), AV_OPT_TYPE_INT, {.i64 = 0x0001 }, 0x0001, 0xffff, AV_OPT_FLAG_ENCODING_PARAM},
     { "mpegts_final_nb_services", "Set desired number of services.",
-      offsetof(MpegTSWrite, final_nb_services), AV_OPT_TYPE_INT, {.i64 = 0x0001 }, 0x0001, 0x0004, AV_OPT_FLAG_ENCODING_PARAM},
+      offsetof(MpegTSWrite, final_nb_services), AV_OPT_TYPE_INT, {.i64 = 0x0001 }, 0x0001, 0x0005, AV_OPT_FLAG_ENCODING_PARAM},
     { "mpegts_area_code", "Set area_code field.",
       offsetof(MpegTSWrite, area_code), AV_OPT_TYPE_INT, {.i64 = 0x0001 }, 0x0001, 0x0DBF, AV_OPT_FLAG_ENCODING_PARAM},
     { "mpegts_guard_interval", "Set guard_interval  field.",
@@ -709,7 +709,18 @@ static void mpegts_write_nit(AVFormatContext *s)
 			}
 		break;
 		case 2:
-			
+			for(i = 0; i < ts->nb_services; i++) {
+				if( (ts->services[i]->sid & 0x18 >> 3 )) {//if true, is a 1-seg service
+					*q++ = 0xAF; //transmission type: 0xAF: C
+					*q++ = 0x01; //number of services of this transm. type
+					put16(&q, ts->services[i]->sid);//service_ID
+				}
+				else {
+					*q++ = 0x0F; //transmission type: 0x0F: A
+					*q++ = 0x01; //number of services of this transm. type
+					put16(&q, ts->services[i]->sid);//service_ID
+				}
+			}
 		break;
 	}
 
@@ -792,7 +803,7 @@ static void mpegts_write_tot(AVFormatContext *s)
     MpegTSWrite *ts = s->priv_data;
     MpegTSService *service;
     uint8_t section[1024], *q, *tot_length_ptr, *desc_len_ptr, *offset_desc_length_ptr;
-    int i, temp_val;
+    int temp_val;
 	unsigned int tot_length;
 
     q = section;
@@ -903,6 +914,7 @@ static int mpegts_write_header(AVFormatContext *s)
     AVStream *st, *pcr_st = NULL;
     AVDictionaryEntry *title, *provider;
     int i, j;
+
     const char *service_name;
     const char *provider_name;
     int *pids;
@@ -923,6 +935,8 @@ static int mpegts_write_header(AVFormatContext *s)
     title = av_dict_get(s->metadata, "service_name", NULL, 0);
     if (!title)
         title = av_dict_get(s->metadata, "title", NULL, 0);
+
+
     service_name = title ? title->value : DEFAULT_SERVICE_NAME;
     provider = av_dict_get(s->metadata, "service_provider", NULL, 0);
     provider_name = provider ? provider->value : DEFAULT_PROVIDER_NAME;
@@ -951,19 +965,192 @@ static int mpegts_write_header(AVFormatContext *s)
 		ts->final_nb_services = 2;
 	break;
 	case 2:
-		
-	break;
-}
 
+//Multiplos programas, perfil 2 - multiple programs, profile 2
 
-//    for(i = 0;i < ts->final_nb_services; i++) {
+		switch (ts->final_nb_services) {
+			case 1:
+			break;
+			case 2:
+			break;
+			case 3:
+				calculated_HD_service_ID = 0x0000; //Initialization necessary?
+				calculated_HD_service_ID = ( ts->onid & 0x7FF ) << 5 | 0x0 << 3 | 0x0;
+
+		   		service = mpegts_add_service(ts, calculated_HD_service_ID, provider_name, "Service 1 - TV");
+				service->pmt.write_packet = section_write_packet;
+				service->pmt.opaque = s;
+				service->pmt.cc = 15;
+
+				calculated_HD_service_ID = 0x0000; //Initialization necessary?
+				calculated_HD_service_ID = ( ts->onid & 0x7FF ) << 5 | 0x0 << 3 | 0x1;
+
+				service = mpegts_add_service(ts, calculated_HD_service_ID, provider_name, "Service 2 - TV");
+				service->pmt.write_packet = section_write_packet;
+				service->pmt.opaque = s;
+				service->pmt.cc = 15;
+
+				calculated_LD_service_ID = 0x0000; //Initialization necessary?
+				calculated_LD_service_ID = ( ts->onid & 0x7FF ) << 5 | 0x3 << 3 | 0x2;
+
+				service = mpegts_add_service(ts, calculated_LD_service_ID, provider_name, "Service 3 - 1Seg");
+				service->pmt.write_packet = section_write_packet;
+				service->pmt.opaque = s;
+				service->pmt.cc = 15;
+
+				ts->final_nb_services = 3;
+			break;
+			case 4:
+				calculated_HD_service_ID = 0x0000; //Initialization necessary?
+				calculated_HD_service_ID = ( ts->onid & 0x7FF ) << 5 | 0x0 << 3 | 0x0;
+
+				service = mpegts_add_service(ts, calculated_HD_service_ID, provider_name, "Service 1 - TV");
+				service->pmt.write_packet = section_write_packet;
+				service->pmt.opaque = s;
+				service->pmt.cc = 15;
+
+				calculated_HD_service_ID = 0x0000; //Initialization necessary?
+				calculated_HD_service_ID = ( ts->onid & 0x7FF ) << 5 | 0x0 << 3 | 0x1;
+
+				service = mpegts_add_service(ts, calculated_HD_service_ID, provider_name, "Service 2 - TV");
+				service->pmt.write_packet = section_write_packet;
+				service->pmt.opaque = s;
+				service->pmt.cc = 15;
+
+				calculated_HD_service_ID = 0x0000; //Initialization necessary?
+				calculated_HD_service_ID = ( ts->onid & 0x7FF ) << 5 | 0x0 << 3 | 0x2;
+
+				service = mpegts_add_service(ts, calculated_HD_service_ID, provider_name, "Service 3 - TV");
+				service->pmt.write_packet = section_write_packet;
+				service->pmt.opaque = s;
+				service->pmt.cc = 15;
+
+				calculated_LD_service_ID = 0x0000; //Initialization necessary?
+				calculated_LD_service_ID = ( ts->onid & 0x7FF ) << 5 | 0x3 << 3 | 0x3;
+
+				service = mpegts_add_service(ts, calculated_LD_service_ID, provider_name, "Service 4 - 1Seg");
+				service->pmt.write_packet = section_write_packet;
+				service->pmt.opaque = s;
+				service->pmt.cc = 15;
+
+				ts->final_nb_services = 4;
+			break;
+			case 5:
+				calculated_HD_service_ID = 0x0000; //Initialization necessary?
+				calculated_HD_service_ID = ( ts->onid & 0x7FF ) << 5 | 0x0 << 3 | 0x0;
+
+				service = mpegts_add_service(ts, calculated_HD_service_ID, provider_name, "Service 1 - TV");
+				service->pmt.write_packet = section_write_packet;
+				service->pmt.opaque = s;
+				service->pmt.cc = 15;
+
+				calculated_HD_service_ID = 0x0000; //Initialization necessary?
+				calculated_HD_service_ID = ( ts->onid & 0x7FF ) << 5 | 0x0 << 3 | 0x1;
+
+				service = mpegts_add_service(ts, calculated_HD_service_ID, provider_name, "Service 2 - TV");
+				service->pmt.write_packet = section_write_packet;
+				service->pmt.opaque = s;
+				service->pmt.cc = 15;
+
+				calculated_HD_service_ID = 0x0000; //Initialization necessary?
+				calculated_HD_service_ID = ( ts->onid & 0x7FF ) << 5 | 0x0 << 3 | 0x2;
+
+				service = mpegts_add_service(ts, calculated_HD_service_ID, provider_name, "Service 3 - TV");
+				service->pmt.write_packet = section_write_packet;
+				service->pmt.opaque = s;
+				service->pmt.cc = 15;
+
+				calculated_HD_service_ID = 0x0000; //Initialization necessary?
+				calculated_HD_service_ID = ( ts->onid & 0x7FF ) << 5 | 0x0 << 3 | 0x3;
+
+				service = mpegts_add_service(ts, calculated_HD_service_ID, provider_name, "Service 4 - TV");
+				service->pmt.write_packet = section_write_packet;
+				service->pmt.opaque = s;
+				service->pmt.cc = 15;
+
+				calculated_LD_service_ID = 0x0000; //Initialization necessary?
+				calculated_LD_service_ID = ( ts->onid & 0x7FF ) << 5 | 0x3 << 3 | 0x4;
+
+				service = mpegts_add_service(ts, calculated_LD_service_ID, provider_name, "Service 5 - 1Seg");
+				service->pmt.write_packet = section_write_packet;
+				service->pmt.opaque = s;
+				service->pmt.cc = 15;
+
+				ts->final_nb_services = 5;
+			break;
+		}
+
+// Igual ao caso acima, porém não foi testado - Same as the above case, but it has not been tested
+/*	
+		char aux_service_name[20];
+
+		for(i = 0;i < ts->final_nb_services-1; i++) {
 //	    service = mpegts_add_service(ts, ts->service_id+i, provider_name, service_name);
 //	
 //	    service->pmt.write_packet = section_write_packet;
 //	    service->pmt.opaque = s;
 //	    service->pmt.cc = 15;
-//    }
 
+		sprintf(aux_service_name, "Programa 0%d", i+1);
+
+		service_name=&aux_service_name;
+
+		calculated_HD_service_ID=( ts->onid & 0x7FF ) << 5 | 0x0 << 3 | i;
+		service = mpegts_add_service(ts,calculated_HD_service_ID , provider_name, service_name);
+		service->pmt.write_packet = section_write_packet;
+		service->pmt.opaque = s;
+		service->pmt.cc = 15;
+		}
+
+		sprintf(aux_service_name, "Programa %d 1-Seg", i+1);
+		service_name=&aux_service_name;
+		calculated_LD_service_ID = ( ts->onid & 0x7FF ) << 5 | 0x3 << 3 | i+1;
+
+		service = mpegts_add_service(ts, calculated_LD_service_ID, provider_name, service_name);
+		service->pmt.write_packet = section_write_packet;
+		service->pmt.opaque = s;
+		service->pmt.cc = 15;
+
+
+		ts->final_nb_services = i+1;
+*/
+//Configuração manual - Manual Configuration
+/* 
+		calculated_HD_service_ID = 0x0000; //Initialization necessary?
+		calculated_HD_service_ID = ( ts->onid & 0x7FF ) << 5 | 0x0 << 3 | 0x0;
+
+	    service = mpegts_add_service(ts, calculated_HD_service_ID, provider_name, service_name);
+	    service->pmt.write_packet = section_write_packet;
+	    service->pmt.opaque = s;
+	    service->pmt.cc = 15;
+
+		calculated_HD_service_ID = 0x0000; //Initialization necessary?
+		calculated_HD_service_ID = ( ts->onid & 0x7FF ) << 5 | 0x0 << 3 | 0x1;
+
+	    service = mpegts_add_service(ts, calculated_HD_service_ID, provider_name, service_name);
+	    service->pmt.write_packet = section_write_packet;
+	    service->pmt.opaque = s;
+	    service->pmt.cc = 15;
+		calculated_HD_service_ID = 0x0000; //Initialization necessary?
+		calculated_HD_service_ID = ( ts->onid & 0x7FF ) << 5 | 0x0 << 3 | 0x2;
+
+	    service = mpegts_add_service(ts, calculated_HD_service_ID, provider_name, service_name);
+	    service->pmt.write_packet = section_write_packet;
+	    service->pmt.opaque = s;
+	    service->pmt.cc = 15;
+		calculated_LD_service_ID = 0x0000; //Initialization necessary?
+		calculated_LD_service_ID = ( ts->onid & 0x7FF ) << 5 | 0x3 << 3 | 0x3;
+
+		service = mpegts_add_service(ts, calculated_LD_service_ID, provider_name, service_name);
+		service->pmt.write_packet = section_write_packet;
+		service->pmt.opaque = s;
+		service->pmt.cc = 15;
+
+		ts->final_nb_services = 4;
+
+*/
+	break;
+}
     //av_log(s, AV_LOG_VERBOSE, "%d services created, expected %d services.\n", ts->nb_services, ts->final_nb_services);
 
     ts->pat.pid = PAT_PID;
