@@ -952,15 +952,15 @@ static int mpegts_write_header(AVFormatContext *s)
 		calculated_HD_service_ID = 0x0000; //Initialization necessary?
 		calculated_HD_service_ID = ( ts->onid & 0x7FF ) << 5 | 0x0 << 3 | 0x0;
 
-	    service = mpegts_add_service(ts, calculated_HD_service_ID, provider_name, service_name);
-	    service->pmt.write_packet = section_write_packet;
-	    service->pmt.opaque = s;
-	    service->pmt.cc = 15;
+	  	service = mpegts_add_service(ts, calculated_HD_service_ID, provider_name, "Service 1 - TV");
+	   	service->pmt.write_packet = section_write_packet;
+	   	service->pmt.opaque = s;
+	   	service->pmt.cc = 15;
 
 		calculated_LD_service_ID = 0x0000; //Initialization necessary?
 		calculated_LD_service_ID = ( ts->onid & 0x7FF ) << 5 | 0x3 << 3 | 0x1;
 
-		service = mpegts_add_service(ts, calculated_LD_service_ID, provider_name, service_name);
+		service = mpegts_add_service(ts, calculated_LD_service_ID, provider_name, "Service 2 - 1Seg");
 		service->pmt.write_packet = section_write_packet;
 		service->pmt.opaque = s;
 		service->pmt.cc = 15;
